@@ -1,52 +1,42 @@
 import os
-import numpy as np
-import pandas as pd
-import cv2
 import re
-import pytesseract
 import time
 
+import cv2
+import numpy as np
+import pandas as pd
+import pytesseract
 from PIL import Image
-from selenium.webdriver.common.by import By
 from selenium.common.exceptions import (
     NoSuchElementException,
-    UnexpectedAlertPresentException
+    UnexpectedAlertPresentException,
 )
-from constantes.configuracion import PATH_PYTESSERACT, tessdata_dir_config
+from selenium.webdriver.common.by import By
+
+from utils.configuracion import PATH_PYTESSERACT, tessdata_dir_config
 
 pytesseract.pytesseract.tesseract_cmd = PATH_PYTESSERACT
 
-HEAD = [
-    "PERÍODO",
-    "TIPO DOCUMENTO",
-    "CÓDIGO DOCUMENTO",
-    "NOMBRE DE IAFAS",
-    "REGIMEN",
-    "FECHA DE INICIO",
-    "FECHA DE FIN",
-    "TIPO DE PLAN DE SALUD",
-    "ESTADO",
-]
+
+def resize_img(img: np.ndarray, scale: np.int64 = 150):
+    width = int(img.shape[1] * scale / 100)
+    height = int(img.shape[0] * scale / 100)
+    dim = (width, height)
+    return cv2.resize(img, dim, interpolation=cv2.INTER_AREA)
 
 
-def get_txt_captcha(path, scale=150):
-
+def get_text_from_captcha(path: str):
     if os.path.exists(path):
         image = Image.open(path).convert("RGB")
         os.remove(path)
         image_array = np.array(image)
-        image_array = image_array[:, :, ::-1].copy()
-        image_array = cv2.bitwise_not(image_array)
-
-        # Cambiar el tamaño a 150%
-        width = int(image_array.shape[1] * scale / 100)
-        height = int(image_array.shape[0] * scale / 100)
-        dim = (width, height)
-        image_array = cv2.resize(image_array, dim, interpolation=cv2.INTER_AREA)
-
-        # Convertir a blanco y negro
-        image_array = cv2.cvtColor(image_array, cv2.COLOR_BGR2GRAY)
-        _, thresh = cv2.threshold(image_array, 127, 255, cv2.THRESH_BINARY)
+        blurred_image = cv2.GaussianBlur(image_array, (0, 0), 1)
+        rgb_image = blurred_image[:, :, ::-1].copy()
+        bgr2gray_array = cv2.cvtColor(rgb_image, cv2.COLOR_BGR2GRAY)
+        resize_image = resize_img(bgr2gray_array, 500)
+        _, thresh = cv2.threshold(
+            resize_image, 0, 255, cv2.THRESH_BINARY + cv2.THRESH_OTSU
+        )
         txt = pytesseract.image_to_string(thresh, config=tessdata_dir_config)
         txt = re.sub(r"[^a-zA-Z0-9]", "", txt)
         if len(txt) > 1:
@@ -122,4 +112,3 @@ def get_content_by_rows(
     except Exception as e:
         print(f"Error: {e}", end=" ")
         return pd.DataFrame(columns=HEAD)
-

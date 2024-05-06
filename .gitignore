@@ -1,3 +1,6 @@
 .idea
 input
 __pycache__
+.mypy_cache
+.ipynb_checkpoints
+.mypy_cache
